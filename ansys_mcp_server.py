@@ -35,6 +35,7 @@ class AnsysInterface:
         self.ansys_path = os.environ.get('ANSYS_ROOT', '')
         self.working_directory = Path.cwd() / "ansys_work"
         self.working_directory.mkdir(exist_ok=True)
+        self.mapdl_session = None
         
     def check_ansys_installation(self) -> Dict[str, Any]:
         """Check if Ansys is installed and accessible"""
@@ -93,14 +94,21 @@ class AnsysInterface:
             return {"status": "error", "message": str(e)}
     
     async def create_mapdl_session(self, run_location: Optional[str] = None) -> Dict[str, Any]:
-        """Create a new MAPDL session"""
+        """Create a new MAPDL session, replacing any existing one"""
         try:
             import ansys.mapdl.core as pymapdl
-            
+
+            if self.mapdl_session is not None:
+                try:
+                    self.mapdl_session.exit()
+                except Exception:
+                    pass
+
             mapdl = pymapdl.launch_mapdl(
                 run_location=run_location or str(self.working_directory)
             )
-            
+            self.mapdl_session = mapdl
+
             return {
                 "status": "success",
                 "session_id": id(mapdl),
@@ -147,26 +155,37 @@ class AnsysInterface:
             return {"status": "error", "message": str(e)}
     
     async def run_mapdl_commands(self, commands: List[str]) -> Dict[str, Any]:
-        """Execute MAPDL commands"""
+        """Execute MAPDL commands against the active session, launching one if needed"""
         try:
             import ansys.mapdl.core as pymapdl
-            
-            # This would need an active MAPDL session
-            # For demo purposes, we'll simulate the response
+
+            if self.mapdl_session is None:
+                launch_result = await self.create_mapdl_session()
+                if launch_result["status"] != "success":
+                    return launch_result
+
             results = []
             for cmd in commands:
-                results.append({
-                    "command": cmd,
-                    "status": "executed",
-                    "output": f"Command '{cmd}' executed successfully"
-                })
-            
+                try:
+                    output = self.mapdl_session.run(cmd)
+                    results.append({
+                        "command": cmd,
+                        "status": "executed",
+                        "output": output
+                    })
+                except Exception as cmd_error:
+                    results.append({
+                        "command": cmd,
+                        "status": "error",
+                        "output": str(cmd_error)
+                    })
+
             return {
                 "status": "success",
                 "commands_executed": len(commands),
                 "results": results
             }
-            
+
         except ImportError:
             return {"status": "error", "message": "PyMAPDL not available"}
         except Exception as e:
@@ -288,7 +307,7 @@ async def handle_list_tools() -> list[Tool]:
         ),
         Tool(
             name="run_mapdl_commands",
-            description="Execute MAPDL commands",
+            description="Execute MAPDL commands against the active session (auto-launches one if none exists)",
             inputSchema={
                 "type": "object",
                 "properties": {

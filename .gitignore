@@ -181,3 +181,5 @@ tmp/
 *~
 \#*\#
 .\#*
+# Local MCP client config (machine-specific absolute paths)
+.mcp.json

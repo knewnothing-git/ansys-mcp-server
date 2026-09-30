@@ -1,5 +1,7 @@
 # MCP Server requirements
-mcp>=0.1.0
+# Pinned <2.0: this server uses the pre-2.0 decorator-based Server API
+# (@server.list_tools(), etc.), which mcp>=2.0 removed.
+mcp<2.0.0,>=1.9.0
 
 # Ansys Python packages (optional, install as needed)
 ansys-fluent-core>=0.15.0
